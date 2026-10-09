@@ -2642,10 +2642,10 @@ function criarImagemGiphy(id) {
         "GIF";
 
     imagem.style.maxWidth =
-        "320px";
+        "220px";
 
     imagem.style.maxHeight =
-        "320px";
+        "220px";
 
     imagem.style.borderRadius =
         "8px";
@@ -2726,10 +2726,10 @@ function criarImagemTenor(id) {
         "GIF";
 
     imagem.style.maxWidth =
-        "320px";
+        "220px";
 
     imagem.style.maxHeight =
-        "320px";
+        "220px";
 
     imagem.style.borderRadius =
         "8px";
@@ -2797,10 +2797,10 @@ function criarImagemEnviada(url) {
             true;
 
         video.style.maxWidth =
-            "320px";
+            "220px";
 
         video.style.maxHeight =
-            "320px";
+            "220px";
 
         video.style.borderRadius =
             "8px";
@@ -2824,10 +2824,10 @@ function criarImagemEnviada(url) {
         "Imagem";
 
     imagem.style.maxWidth =
-        "320px";
+        "220px";
 
     imagem.style.maxHeight =
-        "320px";
+        "220px";
 
     imagem.style.borderRadius =
         "8px";

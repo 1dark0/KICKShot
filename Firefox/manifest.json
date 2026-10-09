@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KICKShot",
-  "version": "1.0",
+  "version": "1.0.3",
   "description": "Compartilhamento de imagens e visualização de mídias no chat da Kick",
   "icons": {
     "16": "icons/icon16.png",
