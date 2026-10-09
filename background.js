@@ -1,3 +1,44 @@
+const KICKSHOT_MATCH = "https://kick.com/*";
+
+function kickshotIsKickPage(url) {
+    try {
+        return new URL(url).origin === "https://kick.com";
+    } catch (erro) {
+        return false;
+    }
+}
+
+async function kickshotInject(tabId) {
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ["content.js"],
+            world: "ISOLATED"
+        });
+    } catch (erro) {
+        console.warn("KICKShot: não foi possível carregar o script na página da Kick:", erro);
+    }
+}
+
+async function kickshotInjectOpenTabs() {
+    try {
+        const tabs = await chrome.tabs.query({ url: KICKSHOT_MATCH });
+        for (const tab of tabs) {
+            if (Number.isInteger(tab.id)) void kickshotInject(tab.id);
+        }
+    } catch (erro) {
+        console.warn("KICKShot: não foi possível procurar abas da Kick:", erro);
+    }
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === "complete" && kickshotIsKickPage(tab.url)) {
+        void kickshotInject(tabId);
+    }
+});
+
+chrome.runtime.onInstalled.addListener(() => void kickshotInjectOpenTabs());
+chrome.runtime.onStartup.addListener(() => void kickshotInjectOpenTabs());
 chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
     if (!mensagem || mensagem.tipo !== "KMC_UPLOAD_IMAGEM") {
         return false;
@@ -123,3 +164,4 @@ chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
 
     return true;
 });
+

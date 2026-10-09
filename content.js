@@ -1,3 +1,6 @@
+(() => {
+    if (globalThis.__KICKSHOT_CONTENT_SCRIPT_STARTED__) return;
+    globalThis.__KICKSHOT_CONTENT_SCRIPT_STARTED__ = true;
 const SELETOR_CAMPO_EDITAVEL = 'textarea, input, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 const codigosColadosRecentementeKMC = new Map();
 let codigoColadoAguardandoEnvioKMC = false;
@@ -1014,7 +1017,7 @@ botaoLimparBuscaGifsKMC.addEventListener("click", evento => {
 });
 
 function solicitarGifsKMC(consulta) {
-    const runtime = globalThis.chrome && globalThis.chrome.runtime;
+    const runtime = (typeof chrome !== "undefined" ? chrome.runtime : null);
     if (!runtime || typeof runtime.sendMessage !== "function") {
         return Promise.reject(new Error("Recarregue a extensão e a página da Kick."));
     }
@@ -2021,7 +2024,7 @@ async function enviarImagemParaBackground(file) {
     }
 
     // O content.js precisa estar carregado pela extensão para acessar chrome.runtime.
-    const runtime = globalThis.chrome && globalThis.chrome.runtime;
+    const runtime = (typeof chrome !== "undefined" ? chrome.runtime : null);
     if (!runtime || typeof runtime.sendMessage !== "function") {
         erroUltimoUploadImagem = "A extensão não conseguiu iniciar o envio. Recarregue-a e atualize a página.";
         console.error("KickMediaChat: chrome.runtime indisponível. Recarregue a extensão e confirme que content.js está declarado no manifest.json.");
@@ -3637,4 +3640,8 @@ verificarPagina();
 
 
 
+
+
+
+})();
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KICKShot",
-  "version": "1.0",
+  "version": "1.0.2",
   "description": "Compartilhamento de imagens e visualização de mídias no chat da Kick",
   "icons": {
     "16": "icons/icon16.png",
@@ -9,6 +9,7 @@
     "128": "icons/icon128.png"
   },
   "host_permissions": [
+    "https://kick.com/*",
     "https://catbox.moe/*",
     "https://files.catbox.moe/*",
     "https://kickshot-giphy.darkartz75.workers.dev/*"
@@ -16,16 +17,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://kick.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle",
-      "world": "ISOLATED"
-    }
+  "permissions": [
+    "scripting"
   ]
 }
