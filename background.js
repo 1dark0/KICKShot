@@ -12,7 +12,7 @@ async function kickshotInject(tabId) {
     try {
         await chrome.scripting.executeScript({
             target: { tabId },
-            files: ["content.js"],
+            files: ["media-codes.js", "content.js"],
             world: "ISOLATED"
         });
     } catch (erro) {
@@ -164,4 +164,3 @@ chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
 
     return true;
 });
-

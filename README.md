@@ -22,3 +22,11 @@ Extensão independente para compartilhar imagens e GIFs no chat da Kick.
 - Visualização de mídias compatíveis compartilhadas no chat.
 
 A busca de GIFs usa o servidor intermediário da KICKShot. Consulte `privacy.html` para saber como os serviços externos são usados.
+
+## Testes
+
+Os testes do módulo de códigos de mídia usam o test runner nativo do Node.js:
+
+```sh
+node --test tests/media-codes.test.js
+```
