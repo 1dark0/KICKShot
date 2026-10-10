@@ -123,3 +123,108 @@ chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
 
     return true;
 });
+
+chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
+    if (!mensagem || mensagem.tipo !== "KMC_HASH_MIDIA") return false;
+
+    try {
+        if (!remetente?.url || new URL(remetente.url).origin !== "https://kick.com") return false;
+    } catch (erro) {
+        return false;
+    }
+
+    const hostsPermitidos = new Set([
+        "files.catbox.moe",
+        "media.giphy.com",
+        "media1.giphy.com",
+        "i.giphy.com",
+        "media.tenor.com",
+        "c.tenor.com",
+        "media1.tenor.com"
+    ]);
+    let url;
+    try {
+        if (typeof mensagem.url !== "string" || mensagem.url.length > 2048) {
+            throw new Error("O endereço da mídia é inválido.");
+        }
+        url = new URL(mensagem.url);
+        if (url.protocol !== "https:" || !hostsPermitidos.has(url.hostname) || url.username || url.password) {
+            throw new Error("Este endereço de mídia não pode ser verificado.");
+        }
+    } catch (erro) {
+        responder({ sucesso: false, erro: erro.message || "O endereço da mídia é inválido." });
+        return false;
+    }
+
+    (async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        let reader;
+        try {
+            const resposta = await fetch(url.href, {
+                credentials: "omit",
+                redirect: "follow",
+                signal: controller.signal
+            });
+            const urlFinal = new URL(resposta.url);
+            if (urlFinal.protocol !== "https:" || !hostsPermitidos.has(urlFinal.hostname)) {
+                throw new Error("O servidor redirecionou para um endereço de mídia não permitido.");
+            }
+            if (!resposta.ok) {
+                throw new Error("O servidor da mídia respondeu HTTP " + resposta.status + ".");
+            }
+            if (!resposta.body) {
+                throw new Error("O navegador não conseguiu ler o arquivo da mídia.");
+            }
+
+            const tamanhoDeclarado = Number(resposta.headers.get("content-length"));
+            const tamanhoMaximo = 25 * 1024 * 1024;
+            if (Number.isFinite(tamanhoDeclarado) && tamanhoDeclarado > tamanhoMaximo) {
+                throw new Error("O arquivo é grande demais para verificar automaticamente.");
+            }
+
+            reader = resposta.body.getReader();
+            const partes = [];
+            let tamanho = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                tamanho += value.byteLength;
+                if (tamanho > tamanhoMaximo) {
+                    await reader.cancel();
+                    throw new Error("O arquivo é grande demais para verificar automaticamente.");
+                }
+                partes.push(value);
+            }
+
+            const bytes = new Uint8Array(tamanho);
+            let deslocamento = 0;
+            for (const parte of partes) {
+                bytes.set(parte, deslocamento);
+                deslocamento += parte.byteLength;
+            }
+            const digest = await crypto.subtle.digest("SHA-256", bytes);
+            const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+            responder({ sucesso: true, hash });
+        } catch (erro) {
+            console.warn("KICKShot: não foi possível calcular a impressão digital da mídia:", erro);
+            responder({
+                sucesso: false,
+                erro: erro?.name === "AbortError"
+                    ? "A verificação da mídia demorou demais."
+                    : (erro?.message || String(erro))
+            });
+        } finally {
+            clearTimeout(timeout);
+            if (reader) {
+                try {
+                    reader.releaseLock();
+                } catch (erro) {
+                    console.warn("KICKShot: não foi possível liberar o leitor da mídia:", erro);
+                }
+            }
+        }
+    })();
+
+    return true;
+});

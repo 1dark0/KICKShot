@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KICKShot",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "browser_specific_settings": {
     "gecko": {
       "id": "kickshot@darkartz75",
@@ -23,6 +23,12 @@
   "host_permissions": [
     "https://catbox.moe/*",
     "https://files.catbox.moe/*",
+    "https://media.giphy.com/*",
+    "https://media1.giphy.com/*",
+    "https://i.giphy.com/*",
+    "https://media.tenor.com/*",
+    "https://c.tenor.com/*",
+    "https://media1.tenor.com/*",
     "https://kickshot-giphy.darkartz75.workers.dev/*"
   ],
   "background": {

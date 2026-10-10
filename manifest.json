@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KICKShot",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Compartilhamento de imagens e visualização de mídias no chat da Kick",
   "icons": {
     "16": "icons/icon16.png",
@@ -12,6 +12,12 @@
     "https://kick.com/*",
     "https://catbox.moe/*",
     "https://files.catbox.moe/*",
+    "https://media.giphy.com/*",
+    "https://media1.giphy.com/*",
+    "https://i.giphy.com/*",
+    "https://media.tenor.com/*",
+    "https://c.tenor.com/*",
+    "https://media1.tenor.com/*",
     "https://kickshot-giphy.darkartz75.workers.dev/*"
   ],
   "background": {

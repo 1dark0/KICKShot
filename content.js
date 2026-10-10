@@ -1888,6 +1888,9 @@ function atualizarLinkColado() {
     media.style.maxHeight = "120px";
     media.style.borderRadius = "8px";
     media.style.display = "block";
+    if (media.dataset.kmcSrc) {
+        media.src = media.dataset.kmcSrc;
+    }
 
     const preview = document.getElementById("kmc-image-preview-media");
     preview.replaceChildren(media);
@@ -2649,12 +2652,12 @@ function criarImagemGiphy(id) {
 
     if (linkOriginal) {
 
-        imagem.src =
+        imagem.dataset.kmcSrc =
             linkOriginal;
 
     } else {
 
-        imagem.src =
+        imagem.dataset.kmcSrc =
             "https://media.giphy.com/media/" +
             encodeURIComponent(id) +
             "/giphy.gif";
@@ -2688,6 +2691,8 @@ function criarImagemGiphy(id) {
                 alternativa
             ) {
 
+                imagem.dataset.kmcSrc =
+                    alternativa;
                 imagem.src =
                     alternativa;
             }
@@ -2733,12 +2738,12 @@ function criarImagemTenor(id) {
                 "/tenor.gif";
         }
 
-        imagem.src =
+        imagem.dataset.kmcSrc =
             url;
 
     } else {
 
-        imagem.src =
+        imagem.dataset.kmcSrc =
             "https://media.tenor.com/" +
             encodeURIComponent(id) +
             "/tenor.gif";
@@ -2772,6 +2777,8 @@ function criarImagemTenor(id) {
                 alternativa
             ) {
 
+                imagem.dataset.kmcSrc =
+                    alternativa;
                 imagem.src =
                     alternativa;
             }
@@ -2803,7 +2810,7 @@ function criarImagemEnviada(url) {
         video.dataset.kmcMedia =
             "true";
 
-        video.src =
+        video.dataset.kmcSrc =
             url;
 
         video.controls =
@@ -2839,7 +2846,7 @@ function criarImagemEnviada(url) {
     imagem.dataset.kmcMedia =
         "true";
 
-    imagem.src =
+    imagem.dataset.kmcSrc =
         url;
 
     imagem.alt =
@@ -2903,6 +2910,89 @@ function carregarMidiasBloqueadasKMC() {
 
 let midiasBloqueadasKMC = carregarMidiasBloqueadasKMC();
 
+function carregarHashesMidiasBloqueadasKMC() {
+    try {
+        const salvos = JSON.parse(localStorage.getItem("kmc_hashes_midias_bloqueadas") || "[]");
+        return Array.isArray(salvos) ? salvos.filter(item => typeof item === "string") : [];
+    } catch (erro) {
+        console.error("KickMediaChat: não foi possível carregar os bloqueios por conteúdo.", erro);
+        return [];
+    }
+}
+
+let hashesMidiasBloqueadasKMC = carregarHashesMidiasBloqueadasKMC();
+const hashesMidiasKMC = new Map();
+
+function carregarMapaHashesMidiasBloqueadasKMC() {
+    try {
+        const salvo = JSON.parse(localStorage.getItem("kmc_mapa_hashes_midias_bloqueadas") || "{}");
+        return salvo && typeof salvo === "object" && !Array.isArray(salvo)
+            ? Object.fromEntries(Object.entries(salvo).filter(([, hash]) => typeof hash === "string"))
+            : {};
+    } catch (erro) {
+        console.error("KickMediaChat: não foi possível carregar o índice de bloqueios por conteúdo.", erro);
+        return {};
+    }
+}
+
+let mapaHashesMidiasBloqueadasKMC = carregarMapaHashesMidiasBloqueadasKMC();
+
+function salvarHashesMidiasBloqueadasKMC() {
+    try {
+        localStorage.setItem("kmc_hashes_midias_bloqueadas", JSON.stringify(hashesMidiasBloqueadasKMC));
+    } catch (erro) {
+        console.warn("KickMediaChat: não foi possível salvar os bloqueios por conteúdo.", erro);
+    }
+}
+
+function registrarHashBloqueioKMC(codigo, hash) {
+    mapaHashesMidiasBloqueadasKMC[normalizarChaveMidiaKMC(codigo)] = hash;
+    if (!hashesMidiasBloqueadasKMC.includes(hash)) {
+        hashesMidiasBloqueadasKMC.push(hash);
+    }
+    try {
+        localStorage.setItem("kmc_mapa_hashes_midias_bloqueadas", JSON.stringify(mapaHashesMidiasBloqueadasKMC));
+    } catch (erro) {
+        console.warn("KickMediaChat: não foi possível salvar o índice de bloqueios por conteúdo.", erro);
+    }
+    salvarHashesMidiasBloqueadasKMC();
+}
+
+function obterHashMidiaKMC(url) {
+    if (hashesMidiasKMC.has(url)) {
+        return hashesMidiasKMC.get(url);
+    }
+
+    const runtime = typeof chrome !== "undefined" ? chrome.runtime : null;
+    if (!runtime || typeof runtime.sendMessage !== "function") {
+        return Promise.reject(new Error("A extensão não está disponível para verificar esta mídia."));
+    }
+
+    let consulta;
+    consulta = new Promise((resolve, reject) => {
+        runtime.sendMessage({ tipo: "KMC_HASH_MIDIA", url }, resposta => {
+            if (runtime.lastError) {
+                reject(new Error(runtime.lastError.message || "Não foi possível verificar a mídia."));
+            } else if (!resposta?.sucesso || typeof resposta.hash !== "string") {
+                reject(new Error(resposta?.erro || "Não foi possível verificar a mídia."));
+            } else {
+                resolve(resposta.hash);
+            }
+        });
+    }).catch(erro => {
+        if (hashesMidiasKMC.get(url) === consulta) {
+            hashesMidiasKMC.delete(url);
+        }
+        throw erro;
+    });
+
+    hashesMidiasKMC.set(url, consulta);
+    if (hashesMidiasKMC.size > 200) {
+        hashesMidiasKMC.delete(hashesMidiasKMC.keys().next().value);
+    }
+    return consulta;
+}
+
 function normalizarChaveMidiaKMC(codigo) {
     return String(codigo || "").trim().toLowerCase();
 }
@@ -2954,10 +3044,45 @@ function renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel = true,
     });
 
     if (midiasBloqueadasKMC.includes(chaveBloqueio)) {
+        const origemBloqueada = midia.dataset.kmcSrc || url;
+        void obterHashMidiaKMC(origemBloqueada).then(hash => {
+            midia.dataset.kmcBlockedHash = hash;
+            registrarHashBloqueioKMC(codigo, hash);
+        }).catch(erro => console.warn("KickMediaChat: não foi possível registrar a impressão digital da mídia bloqueada.", erro));
+        midia.pause?.();
+        midia.removeAttribute("src");
+        midia.load?.();
         const aviso = document.createElement("span");
         aviso.textContent = "🚫 Mídia bloqueada";
-        const botaoDesbloquear = criarBotaoBloqueioKMC("Desbloquear", "Desbloquear esta imagem ou GIF", () => {
+        const botaoDesbloquear = criarBotaoBloqueioKMC("Desbloquear", "Desbloquear esta imagem ou GIF", async () => {
+            let hashBloqueio = midia.dataset.kmcBlockedHash;
+            if (!hashBloqueio && origemBloqueada) {
+                try {
+                    hashBloqueio = await obterHashMidiaKMC(origemBloqueada);
+                } catch (erro) {
+                    console.warn("KickMediaChat: não foi possível remover o bloqueio por conteúdo.", erro);
+                }
+            }
             midiasBloqueadasKMC = midiasBloqueadasKMC.filter(item => item !== chaveBloqueio);
+            if (hashBloqueio) {
+                registrarHashBloqueioKMC(codigo, hashBloqueio);
+                const chavesDoHash = new Set(Object.entries(mapaHashesMidiasBloqueadasKMC)
+                    .filter(([, hash]) => hash === hashBloqueio)
+                    .map(([chave]) => chave));
+                chavesDoHash.add(chaveBloqueio);
+                midiasBloqueadasKMC = midiasBloqueadasKMC.filter(item => !chavesDoHash.has(item));
+                for (const chave of chavesDoHash) {
+                    delete mapaHashesMidiasBloqueadasKMC[chave];
+                }
+                hashesMidiasBloqueadasKMC = hashesMidiasBloqueadasKMC.filter(item => item !== hashBloqueio);
+                try {
+                    localStorage.setItem("kmc_mapa_hashes_midias_bloqueadas", JSON.stringify(mapaHashesMidiasBloqueadasKMC));
+                } catch (erro) {
+                    console.warn("KickMediaChat: não foi possível atualizar o índice de bloqueios por conteúdo.", erro);
+                }
+                salvarHashesMidiasBloqueadasKMC();
+                delete midia.dataset.kmcBlockedHash;
+            }
             salvarMidiasBloqueadasKMC();
             renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel, legenda);
         });
@@ -2965,6 +3090,44 @@ function renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel = true,
         elemento.dataset.kmcProcessed = "true";
         elemento.replaceChildren(bloco);
         return;
+    }
+
+    const origemMidia = midia.dataset.kmcSrc || url;
+    if (
+        hashesMidiasBloqueadasKMC.length &&
+        origemMidia &&
+        elemento.dataset.kmcHashChecked !== origemMidia
+    ) {
+        if (elemento.dataset.kmcHashCheckPending === origemMidia) {
+            return;
+        }
+        elemento.dataset.kmcHashCheckPending = origemMidia;
+        void obterHashMidiaKMC(origemMidia).then(hash => {
+            if (!elemento.isConnected) return;
+            delete elemento.dataset.kmcHashCheckPending;
+            elemento.dataset.kmcHashChecked = origemMidia;
+            if (hashesMidiasBloqueadasKMC.includes(hash)) {
+                midia.dataset.kmcBlockedHash = hash;
+                registrarHashBloqueioKMC(codigo, hash);
+                if (!midiasBloqueadasKMC.includes(chaveBloqueio)) {
+                    midiasBloqueadasKMC.push(chaveBloqueio);
+                    salvarMidiasBloqueadasKMC();
+                }
+            }
+            renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel, legenda);
+        }).catch(erro => {
+            if (!elemento.isConnected) return;
+            delete elemento.dataset.kmcHashCheckPending;
+            elemento.dataset.kmcHashChecked = origemMidia;
+            console.warn("KickMediaChat: não foi possível comparar a mídia com a lista de bloqueios.", erro);
+            renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel, legenda);
+        });
+        return;
+    }
+
+    const fonteMidia = midia.dataset.kmcSrc;
+    if (fonteMidia && midia.getAttribute("src") !== fonteMidia) {
+        midia.src = fonteMidia;
     }
 
     const linkCodigo = document.createElement("span");
@@ -3027,6 +3190,11 @@ function renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel = true,
             midiasBloqueadasKMC.push(chaveBloqueio);
             salvarMidiasBloqueadasKMC();
         }
+        const origem = midia.dataset.kmcSrc || url;
+        void obterHashMidiaKMC(origem).then(hash => {
+            midia.dataset.kmcBlockedHash = hash;
+            registrarHashBloqueioKMC(codigo, hash);
+        }).catch(erro => console.warn("KickMediaChat: não foi possível salvar o bloqueio por conteúdo.", erro));
         renderizarCodigoComMidia(elemento, codigo, url, midia, clicavel, legenda);
     });
     linhaCodigo.append(linkCodigo, botaoBloquear);

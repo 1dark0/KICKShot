@@ -1,7 +1,9 @@
 const assert = require("node:assert/strict");
+const { createHash, webcrypto } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 const mediaCodesModules = [
     require("../media-codes.js"),
     require("../Firefox/media-codes.js")
@@ -142,6 +144,106 @@ test("usa o código gerado pelo módulo em ambos os navegadores", () => {
 
         assert.match(contentScript, /valor = codigo;/);
         assert.match(contentScript, /decodificarCodigoImagem\(encontrado\[0\]\)/);
+    }
+});
+
+test("não carrega mídias bloqueadas no chat em nenhum dos navegadores", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+        const bloqueio = contentScript.indexOf("if (midiasBloqueadasKMC.includes(chaveBloqueio))");
+        const limpaFonte = contentScript.indexOf('midia.removeAttribute("src")', bloqueio);
+        const carregaFonte = contentScript.indexOf("midia.src = fonteMidia", bloqueio);
+
+        assert.notEqual(bloqueio, -1);
+        assert.ok(limpaFonte > bloqueio);
+        assert.ok(carregaFonte > limpaFonte);
+        assert.match(contentScript, /localStorage\.getItem\("kmc_hashes_midias_bloqueadas"\)/);
+        assert.match(contentScript, /hashesMidiasBloqueadasKMC\.includes\(hash\)/);
+        assert.match(contentScript, /localStorage\.getItem\("kmc_mapa_hashes_midias_bloqueadas"\)/);
+        assert.match(contentScript, /chavesDoHash\.has\(item\)/);
+        assert.match(contentScript, /imagem\.dataset\.kmcSrc\s*=/);
+        assert.match(contentScript, /video\.dataset\.kmcSrc\s*=/);
+    }
+});
+
+test("carrega a mídia selecionada na prévia do painel nos dois navegadores", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+        const inicio = contentScript.indexOf("function atualizarLinkColado()");
+        const fim = contentScript.indexOf('\ndocument.getElementById("kmc-url").addEventListener', inicio);
+        const corpo = contentScript.slice(inicio, fim);
+
+        assert.notEqual(inicio, -1);
+        assert.match(corpo, /media\.dataset\.kmcSrc/);
+        assert.match(corpo, /media\.src = media\.dataset\.kmcSrc/);
+        assert.ok(corpo.indexOf("media.src = media.dataset.kmcSrc") < corpo.indexOf("preview.replaceChildren(media)"));
+    }
+});
+
+test("calcula hash SHA-256 da mídia permitida nos backgrounds Chrome e Firefox", async () => {
+    const conteudo = new TextEncoder().encode("conteúdo de teste da mídia");
+    const hashEsperado = createHash("sha256").update(conteudo).digest("hex");
+
+    for (const arquivo of ["../background.js", "../Firefox/background.js"]) {
+        const listeners = [];
+        let urlBuscada;
+        const evento = { addListener: () => {} };
+        const chromeApi = {
+            runtime: {
+                onMessage: { addListener: listener => listeners.push(listener) },
+                onInstalled: evento,
+                onStartup: evento
+            },
+            tabs: {
+                onUpdated: evento,
+                query: async () => [],
+                get: async () => ({})
+            },
+            scripting: { executeScript: async () => {} }
+        };
+
+        vm.runInNewContext(fs.readFileSync(path.join(__dirname, arquivo), "utf8"), {
+            chrome: chromeApi,
+            URL,
+            AbortController,
+            setTimeout,
+            clearTimeout,
+            crypto: webcrypto,
+            fetch: async (url, options) => {
+                urlBuscada = String(url);
+                assert.equal(options.credentials, "omit");
+                const resposta = new Response(conteudo, {
+                    status: 200,
+                    headers: { "content-length": String(conteudo.byteLength) }
+                });
+                Object.defineProperty(resposta, "url", { value: urlBuscada });
+                return resposta;
+            },
+            console: { warn() {} }
+        });
+
+        const listener = listeners[listeners.length - 1];
+        assert.ok(listener, `handler de hash ausente em ${arquivo}`);
+
+        const resposta = await new Promise(resolve => {
+            listener(
+                { tipo: "KMC_HASH_MIDIA", url: "https://files.catbox.moe/image.png" },
+                { url: "https://kick.com/chat" },
+                resolve
+            );
+        });
+
+        assert.equal(urlBuscada, "https://files.catbox.moe/image.png");
+        assert.deepEqual(JSON.parse(JSON.stringify(resposta)), { sucesso: true, hash: hashEsperado });
+
+        let respostaHostNaoPermitido;
+        assert.equal(listener(
+            { tipo: "KMC_HASH_MIDIA", url: "https://example.com/image.png" },
+            { url: "https://kick.com/chat" },
+            resposta => { respostaHostNaoPermitido = resposta; }
+        ), false);
+        assert.equal(respostaHostNaoPermitido.sucesso, false);
+        assert.equal(urlBuscada, "https://files.catbox.moe/image.png");
     }
 });
 
