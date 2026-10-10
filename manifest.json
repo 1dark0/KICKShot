@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KICKShot",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Compartilhamento de imagens e visualização de mídias no chat da Kick",
   "icons": {
     "16": "icons/icon16.png",
@@ -19,5 +19,18 @@
   },
   "permissions": [
     "scripting"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://kick.com/*"
+      ],
+      "js": [
+        "media-codes.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
   ]
 }

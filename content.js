@@ -1,10 +1,10 @@
 (() => {
     if (globalThis.__KICKSHOT_CONTENT_SCRIPT_STARTED__) return;
+    if (!globalThis.KICKShotMediaCodes) {
+        throw new Error("KICKShot: módulo de códigos de mídia não foi carregado.");
+    }
+    const { codificarImagem, decodificarImagem } = globalThis.KICKShotMediaCodes;
     globalThis.__KICKSHOT_CONTENT_SCRIPT_STARTED__ = true;
-if (!globalThis.KICKShotMediaCodes) {
-    throw new Error("KICKShot: módulo de códigos de mídia não foi carregado.");
-}
-const { codificarImagem, decodificarImagem } = globalThis.KICKShotMediaCodes;
 const SELETOR_CAMPO_EDITAVEL = 'textarea, input, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 const codigosColadosRecentementeKMC = new Map();
 let codigoColadoAguardandoEnvioKMC = false;
