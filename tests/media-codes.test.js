@@ -2,10 +2,17 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const { codificarImagem, decodificarImagem } = require("../media-codes.js");
+const mediaCodesModules = [
+    require("../media-codes.js"),
+    require("../Firefox/media-codes.js")
+];
+const { codificarImagem, decodificarImagem, decodificarCodigoImagem, montarMensagemComMidia, separarMensagemComMidia } = mediaCodesModules[0];
 
 test("codifica links HTTPS do Catbox em códigos curtos", () => {
-    assert.equal(codificarImagem("https://files.catbox.moe/image_123.png"), "image_123_png");
+    for (const mediaCodes of mediaCodesModules) {
+        assert.equal(mediaCodes.codificarImagem("https://files.catbox.moe/image_123.png"), "KMC_image_123_png_IMG");
+        assert.equal(mediaCodes.codificarImagem("https://files.catbox.moe/animation.gif"), "KMC_animation_gif_GIF");
+    }
 });
 
 test("não codifica links fora do domínio HTTPS permitido", () => {
@@ -15,6 +22,37 @@ test("não codifica links fora do domínio HTTPS permitido", () => {
 
 test("decodifica códigos curtos para links do Catbox", () => {
     assert.equal(decodificarImagem("image_123_webm"), "https://files.catbox.moe/image_123.webm");
+});
+
+test("decodifica códigos identificados com .IMG ou .GIF e preserva o formato antigo", () => {
+    for (const mediaCodes of mediaCodesModules) {
+        assert.equal(mediaCodes.decodificarCodigoImagem("KMC_image_123_png_IMG"), "https://files.catbox.moe/image_123.png");
+        assert.equal(mediaCodes.decodificarCodigoImagem("KMC_image_123_gif_GIF"), "https://files.catbox.moe/image_123.gif");
+        assert.equal(mediaCodes.decodificarCodigoImagem("KMC_image_123_png.IMG"), "https://files.catbox.moe/image_123.png");
+        assert.equal(mediaCodes.decodificarCodigoImagem("KMC_image_123_gif.GIF"), "https://files.catbox.moe/image_123.gif");
+        assert.equal(mediaCodes.decodificarCodigoImagem("KMCIMG_image_123_png"), "https://files.catbox.moe/image_123.png");
+    }
+});
+
+test("adiciona _GIF aos GIFs GIPHY e ainda entende códigos antigos", () => {
+    for (const mediaCodes of mediaCodesModules) {
+        const codigoNovo = mediaCodes.codificarCodigoGiphy("gif123");
+        assert.equal(codigoNovo, "gph:gif123_GIF");
+        assert.equal(mediaCodes.decodificarCodigoGiphy(codigoNovo), "gif123");
+        assert.equal(mediaCodes.decodificarCodigoGiphy("gph:gif123"), "gif123");
+        assert.equal(mediaCodes.decodificarCodigoGiphy("gph:gif123.GIF"), "gif123");
+        assert.equal(mediaCodes.codificarCodigoGiphy("id com espaço"), null);
+    }
+});
+
+test("usa o código GIPHY terminado em _GIF na busca, prévia e leitura do chat", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+
+        assert.match(contentScript, /codificarCodigoGiphy\(id\)/);
+        assert.match(contentScript, /criarImagemGiphy\(decodificarCodigoGiphy\(tag\)/);
+        assert.match(contentScript, /const idGiphy = decodificarCodigoGiphy\(texto\)/);
+    }
 });
 
 test("mantém compatibilidade com códigos antigos em Base64URL", () => {
@@ -48,4 +86,121 @@ test("não marca o content script como iniciado antes de validar o módulo", () 
     assert.notEqual(moduleCheck, -1);
     assert.notEqual(startedFlag, -1);
     assert.ok(moduleCheck < startedFlag);
+});
+
+test("coloca a mensagem opcional antes do código da mídia", () => {
+    const mensagem = montarMensagemComMidia("  mensagem  ", "KMCIMG_nw2hdp_png");
+    assert.equal(mensagem, "mensagem KMCIMG_nw2hdp_png");
+    assert.deepEqual(separarMensagemComMidia(mensagem), {
+        antes: "mensagem",
+        codigo: "KMCIMG_nw2hdp_png",
+        depois: ""
+    });
+});
+
+test("envia somente o código da mídia sem inserir texto adicional", () => {
+    for (const mediaCodes of mediaCodesModules) {
+        const mensagemGif = mediaCodes.montarMensagemComMidia("", "gph:UCl0NcfQEPPTOoiezU_GIF");
+        const mensagemImagem = mediaCodes.montarMensagemComMidia("", "KMC_image_123_png_IMG");
+        assert.equal(mensagemGif, "gph:UCl0NcfQEPPTOoiezU_GIF");
+        assert.equal(mensagemImagem, "KMC_image_123_png_IMG");
+        assert.equal(mediaCodes.decodificarCodigoGiphy("gph:UCl0NcfQEPPTOoiezUÉUMGIFCARALHO_GIF"), null);
+        assert.equal(mediaCodes.decodificarCodigoImagem("KMC_image_123_pngÉUMAIMAGEMCARALHO_IMG"), null);
+        assert.deepEqual(mediaCodes.separarMensagemComMidia(mensagemGif), {
+            antes: "",
+            codigo: "gph:UCl0NcfQEPPTOoiezU_GIF",
+            depois: ""
+        });
+        const mensagemComLegenda = mediaCodes.montarMensagemComMidia("olha isso", "tnr:gif123");
+        assert.equal(mensagemComLegenda, "olha isso tnr:gif123");
+        assert.deepEqual(mediaCodes.separarMensagemComMidia(mensagemComLegenda), {
+            antes: "olha isso",
+            codigo: "tnr:gif123",
+            depois: ""
+        });
+    }
+});
+
+test("separa mensagens com códigos identificados de imagem e GIF", () => {
+    assert.deepEqual(
+        separarMensagemComMidia("foto KMC_nw2hdp_png_IMG"),
+        { antes: "foto", codigo: "KMC_nw2hdp_png_IMG", depois: "" }
+    );
+    assert.deepEqual(
+        separarMensagemComMidia("animação KMC_nw2hdp_gif_GIF"),
+        { antes: "animação", codigo: "KMC_nw2hdp_gif_GIF", depois: "" }
+    );
+    assert.deepEqual(
+        separarMensagemComMidia("reação gph:gif123_GIF"),
+        { antes: "reação", codigo: "gph:gif123_GIF", depois: "" }
+    );
+});
+
+test("usa o código gerado pelo módulo em ambos os navegadores", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+
+        assert.match(contentScript, /valor = codigo;/);
+        assert.match(contentScript, /decodificarCodigoImagem\(encontrado\[0\]\)/);
+    }
+});
+
+test("preserva o envio da mídia sem texto opcional", () => {
+    const imagem = montarMensagemComMidia("", "KMCIMG_nw2hdp_png");
+    const gif = montarMensagemComMidia("   ", "tnr:gif123");
+    assert.equal(imagem, "KMCIMG_nw2hdp_png");
+    assert.equal(gif, "tnr:gif123");
+});
+
+test("separa o texto antes e depois do código da mídia", () => {
+    assert.deepEqual(
+        separarMensagemComMidia("antes KMCIMG_nw2hdp_png depois"),
+        { antes: "antes", codigo: "KMCIMG_nw2hdp_png", depois: "depois" }
+    );
+    assert.deepEqual(
+        separarMensagemComMidia("gph:gif123 fim"),
+        { antes: "", codigo: "gph:gif123", depois: "fim" }
+    );
+    assert.equal(separarMensagemComMidia("mensagem sem mídia"), null);
+});
+
+test("mostra o texto digitado junto da prévia de mídia nos dois navegadores", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+
+        assert.match(contentScript, /id="kmc-message-preview"/);
+        assert.match(contentScript, /id="kmc-image-preview-media"/);
+        assert.match(contentScript, /document\.getElementById\("kmc-caption"\)\.addEventListener\("input", atualizarPreviaMensagemKMC\)/);
+        assert.match(contentScript, /previewMensagem\.textContent = mensagem/);
+    }
+});
+
+test("exibe a prévia do arquivo selecionado nos dois navegadores", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+        const start = contentScript.indexOf("function mostrarPreviewImagem(file)");
+        const end = contentScript.indexOf("\nasync function transformarImagemSelecionada", start);
+        const functionBody = contentScript.slice(start, end);
+
+        assert.notEqual(start, -1);
+        assert.match(functionBody, /atualizarPreviaMensagemKMC\(\)/);
+        assert.doesNotMatch(functionBody, /preview\.style\.display = "block"/);
+    }
+});
+
+test("carrega sugestões GIPHY ao abrir a busca e ao limpar o termo nos dois navegadores", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+
+        assert.match(contentScript, /campoBuscaGifsKMC\.value\.trim\(\) \|\| "trending"/);
+        assert.match(contentScript, /if \(!resultadosGifsKMC\.childElementCount\) buscarGifsKMC\(\)/);
+        assert.match(contentScript, /campoBuscaGifsKMC\.focus\(\);\s*buscarGifsKMC\(\);/);
+    }
+});
+
+test("não mostra a frase de instrução antiga no painel de GIFs", () => {
+    for (const arquivo of ["../content.js", "../Firefox/content.js"]) {
+        const contentScript = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+        assert.doesNotMatch(contentScript, /Pesquise GIFs e selecione um para preparar o envio/);
+    }
 });

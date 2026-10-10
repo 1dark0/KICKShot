@@ -13,8 +13,9 @@
             if (endereco.protocol !== "https:" || endereco.hostname !== "files.catbox.moe") return null;
             const nomeArquivo = decodeURIComponent(endereco.pathname.slice(1));
             if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9]{1,10})?$/.test(nomeArquivo)) return null;
-            // O sublinhado evita que a Kick trate a extensão do arquivo como link.
-            return nomeArquivo.replace(/\./g, "_");
+            // Evita que a Kick transforme o tipo da mídia em link.
+            const extensaoTipo = /\.gif$/i.test(nomeArquivo) ? "_GIF" : "_IMG";
+            return "KMC_" + nomeArquivo.replace(/\./g, "_") + extensaoTipo;
         } catch (erro) {
             console.error("KickMediaChat: não foi possível encurtar o link da imagem:", erro);
             return null;
@@ -45,5 +46,50 @@
         return null;
     }
 
-    return Object.freeze({ codificarImagem, decodificarImagem });
+    function decodificarCodigoImagem(codigo) {
+        if (typeof codigo !== "string") return null;
+        const payload = codigo
+            .replace(/^KMC_/i, "")
+            .replace(/[._](?:IMG|GIF)$/i, "")
+            .replace(/^KMCIMG_/i, "");
+        return decodificarImagem(payload);
+    }
+
+    function codificarCodigoGiphy(id) {
+        if (typeof id !== "string" || !/^[A-Za-z0-9_-]+$/.test(id)) return null;
+        return "gph:" + id + "_GIF";
+    }
+
+    function decodificarCodigoGiphy(codigo) {
+        if (typeof codigo !== "string") return null;
+        const id = codigo
+            .replace(/^gph:/i, "")
+            .replace(/[._]GIF$/i, "");
+        return /^gph:/i.test(codigo) && /^[A-Za-z0-9_-]+$/.test(id) ? id : null;
+    }
+
+    function montarMensagemComMidia(texto, codigo) {
+        const mensagem = String(texto || "").trim();
+        return mensagem ? mensagem + " " + codigo : codigo;
+    }
+
+    function separarMensagemComMidia(texto) {
+        const mensagem = String(texto || "");
+        const prefixosCodigo = /^(?:KMC_|KMCIMG_|KMCGIF_TNR_|gph:|tnr:|img:https%3A%2F%2F)/i;
+        const formatoCodigo = /^(?:KMC_[A-Za-z0-9_.-]+[._](?:IMG|GIF)|KMCIMG_[A-Za-z0-9_.-]+|KMCGIF_TNR_[A-Za-z0-9_.-]+|gph:[A-Za-z0-9_.-]+|tnr:[A-Za-z0-9_.-]+|img:https%3A%2F%2F[A-Za-z0-9%._~-]+)$/i;
+        const tokens = [...mensagem.matchAll(/\S+/g)];
+        for (const token of tokens) {
+            if (!prefixosCodigo.test(token[0])) continue;
+            const codigo = token[0];
+            if (!formatoCodigo.test(codigo)) continue;
+            return {
+                antes: mensagem.slice(0, token.index).trim(),
+                codigo,
+                depois: mensagem.slice(token.index + token[0].length).trim()
+            };
+        }
+        return null;
+    }
+
+    return Object.freeze({ codificarImagem, decodificarImagem, decodificarCodigoImagem, codificarCodigoGiphy, decodificarCodigoGiphy, montarMensagemComMidia, separarMensagemComMidia });
 });

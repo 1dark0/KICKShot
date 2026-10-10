@@ -3,6 +3,7 @@ A KICKShot é uma extensão independente para compartilhar imagens e visualizar 
 Recursos
 
 - Envio de imagens escolhidas pelo usuário para hospedagem no Catbox.
+- Texto opcional antes da imagem ou GIF enviado.
 - Visualização de imagens e GIFs compatíveis compartilhados no chat.
 - Busca de GIFs no GIPHY e seleção para compartilhar no chat.
 - Compartilhamento de GIFs ao colar um link compatível.
